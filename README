@@ -1,0 +1,7 @@
+Trivial patches to use sparse in C++ code.
+Probably won't work for you - I only extern'd stuff I use in my own projects.
+
+--
+Silvio Cesare
+silvio.cesare _a_t_ gmail _d_o_t_ com
+Deakin University

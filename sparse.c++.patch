@@ -1,0 +1,480 @@
+diff -u sparse-0.4.2/expression.h sparse-silvio/expression.h
+--- sparse-0.4.2/expression.h	2009-10-12 16:11:41.000000000 +1100
++++ sparse-silvio/expression.h	2011-01-28 11:58:58.800413200 +1100
+@@ -76,7 +76,7 @@
+ 		long double fvalue;
+ 
+ 		// EXPR_STRING
+-		struct string *string;
++		struct sparsestring *string;
+ 
+ 		// EXPR_UNOP, EXPR_PREOP and EXPR_POSTOP
+ 		struct /* unop */ {
+@@ -156,6 +156,8 @@
+ 	};
+ };
+ 
++extern "C" {
++
+ /* Constant expression values */
+ int is_zero_constant(struct expression *);
+ long long get_expression_value(struct expression *);
+@@ -174,10 +176,12 @@
+ 
+ extern int expand_symbol(struct symbol *);
+ 
++};
++
+ static inline struct expression *alloc_expression(struct position pos, int type)
+ {
+ 	struct expression *expr = __alloc_expression(0);
+-	expr->type = type;
++	expr->type = (expression_type)type;
+ 	expr->pos = pos;
+ 	return expr;
+ }
+@@ -193,17 +197,19 @@
+ }
+ 
+ /* Type name parsing */
+-struct token *typename(struct token *, struct symbol **, int *);
++struct token *_typename(struct token *, struct symbol **, int *);
+ 
+ static inline int lookup_type(struct token *token)
+ {
+ 	if (token->pos.type == TOKEN_IDENT) {
+-		struct symbol *sym = lookup_symbol(token->ident, NS_SYMBOL | NS_TYPEDEF);
+-		return sym && (sym->namespace & NS_TYPEDEF);
++		struct symbol *sym = lookup_symbol(token->ident, (namespace_t)(NS_SYMBOL | NS_TYPEDEF));
++		return sym && (sym->_namespace & NS_TYPEDEF);
+ 	}
+ 	return 0;
+ }
+ 
++extern "C" {
++
+ /* Statement parsing */
+ struct statement *alloc_statement(struct position pos, int type);
+ struct token *initializer(struct expression **tree, struct token *token);
+@@ -216,4 +222,6 @@
+ void cast_value(struct expression *expr, struct symbol *newtype,
+ 	struct expression *old, struct symbol *oldtype);
+ 
++};
++
+ #endif
+diff -u sparse-0.4.2/lib.h sparse-silvio/lib.h
+--- sparse-0.4.2/lib.h	2009-10-12 16:11:41.000000000 +1100
++++ sparse-silvio/lib.h	2011-01-28 11:58:57.862913200 +1100
+@@ -115,6 +115,8 @@
+ extern int dbg_entry;
+ extern int dbg_dead;
+ 
++extern "C" {
++
+ extern void declare_builtin_functions(void);
+ extern void create_builtin_stream(void);
+ extern struct symbol_list *sparse_initialize(int argc, char **argv, struct string_list **files);
+@@ -159,31 +161,31 @@
+ 
+ static inline struct instruction * delete_last_instruction(struct instruction_list **head)
+ {
+-	return undo_ptr_list_last((struct ptr_list **)head);
++	return (struct instruction *)undo_ptr_list_last((struct ptr_list **)head);
+ }
+ 
+ static inline struct basic_block * delete_last_basic_block(struct basic_block_list **head)
+ {
+-	return delete_ptr_list_last((struct ptr_list **)head);
++	return (struct basic_block *)delete_ptr_list_last((struct ptr_list **)head);
+ }
+ 
+ static inline struct basic_block *first_basic_block(struct basic_block_list *head)
+ {
+-	return first_ptr_list((struct ptr_list *)head);
++	return (struct basic_block *)first_ptr_list((struct ptr_list *)head);
+ }
+ static inline struct instruction *last_instruction(struct instruction_list *head)
+ {
+-	return last_ptr_list((struct ptr_list *)head);
++	return (struct instruction *)last_ptr_list((struct ptr_list *)head);
+ }
+ 
+ static inline struct instruction *first_instruction(struct instruction_list *head)
+ {
+-	return first_ptr_list((struct ptr_list *)head);
++	return (struct instruction *)first_ptr_list((struct ptr_list *)head);
+ }
+ 
+ static inline pseudo_t first_pseudo(struct pseudo_list *head)
+ {
+-	return first_ptr_list((struct ptr_list *)head);
++	return (pseudo_t)first_ptr_list((struct ptr_list *)head);
+ }
+ 
+ static inline void concat_symbol_list(struct symbol_list *from, struct symbol_list **to)
+@@ -216,6 +218,8 @@
+ 	add_ptr_list(list, expr);
+ }
+ 
++};
++
+ #define hashval(x) ((unsigned long)(x))
+ 
+ #endif
+diff -u sparse-0.4.2/linearize.h sparse-silvio/linearize.h
+--- sparse-0.4.2/linearize.h	2009-10-12 16:11:41.000000000 +1100
++++ sparse-silvio/linearize.h	2011-01-28 11:58:58.269163200 +1100
+@@ -42,7 +42,7 @@
+ 
+ extern struct pseudo void_pseudo;
+ 
+-#define VOID (&void_pseudo)
++#define _VOID (&void_pseudo)
+ 
+ struct multijmp {
+ 	struct basic_block *target;
+@@ -314,9 +314,9 @@
+ }
+ 
+ static inline void replace_bb_in_list(struct basic_block_list **list,
+-	struct basic_block *old, struct basic_block *new, int count)
++	struct basic_block *old, struct basic_block *newp, int count)
+ {
+-	replace_ptr_list_entry((struct ptr_list **)list, old, new, count);
++	replace_ptr_list_entry((struct ptr_list **)list, old, newp, count);
+ }
+ 
+ struct entrypoint {
+@@ -328,6 +328,8 @@
+ 	struct instruction *entry;
+ };
+ 
++extern "C" {
++
+ extern void insert_select(struct basic_block *bb, struct instruction *br, struct instruction *phi, pseudo_t if_true, pseudo_t if_false);
+ extern void insert_branch(struct basic_block *bb, struct instruction *br, struct basic_block *target);
+ 
+@@ -342,5 +344,7 @@
+ void show_bb(struct basic_block *bb);
+ const char *show_instruction(struct instruction *insn);
+ 
++};
++
+ #endif /* LINEARIZE_H */
+ 
+diff -u sparse-0.4.2/parse.h sparse-silvio/parse.h
+--- sparse-0.4.2/parse.h	2009-10-12 16:11:41.000000000 +1100
++++ sparse-silvio/parse.h	2011-01-28 11:58:58.316038200 +1100
+@@ -60,7 +60,7 @@
+ 		};
+ 		struct /* labeled_struct */ {
+ 			struct symbol *label_identifier;
+-			struct statement *label_statement;
++			struct statement *label_struct_statement;
+ 		};
+ 		struct /* case_struct */ {
+ 			struct expression *case_expression;
+@@ -115,6 +115,8 @@
+ 	};
+ };
+ 
++extern "C" {
++
+ extern struct symbol_list *function_computed_target_list;
+ extern struct statement_list *function_computed_goto_list;
+ 
+@@ -134,4 +136,6 @@
+ extern void uninline(struct symbol *sym);
+ extern void init_parser(int);
+ 
++};
++
+ #endif /* PARSE_H */
+diff -u sparse-0.4.2/ptrlist.h sparse-silvio/ptrlist.h
+--- sparse-0.4.2/ptrlist.h	2009-10-12 16:11:41.000000000 +1100
++++ sparse-silvio/ptrlist.h	2011-01-28 11:58:58.753538200 +1100
+@@ -9,7 +9,7 @@
+  * (C) Copyright Linus Torvalds 2003-2005
+  */
+ 
+-#define container(ptr, type, member) \
++#define _container(ptr, type, member) \
+ 	(type *)((void *)(ptr) - offsetof(type, member))
+ 
+ /* Silly type-safety check ;) */
+@@ -39,7 +39,7 @@
+ void * undo_ptr_list_last(struct ptr_list **head);
+ void * delete_ptr_list_last(struct ptr_list **head);
+ int delete_ptr_list_entry(struct ptr_list **, void *, int);
+-int replace_ptr_list_entry(struct ptr_list **, void *old, void *new, int);
++int replace_ptr_list_entry(struct ptr_list **, void *old, void *newp, int);
+ extern void sort_list(struct ptr_list **, int (*)(const void *, const void *));
+ 
+ extern void **__add_ptr_list(struct ptr_list **, void *, unsigned long);
+@@ -57,7 +57,7 @@
+ #define add_ptr_list_tag(list,entry,tag) \
+ 	MKTYPE(*(list), (CHECK_TYPE(*(list),(entry)),__add_ptr_list((struct ptr_list **)(list), (entry), (tag))))
+ #define add_ptr_list_notag(list,entry)										\
+-	MKTYPE(*(list), (CHECK_TYPE(*(list),(entry)),__add_ptr_list((struct ptr_list **)(list),			\
++	MKTY9PE(*(list), (CHECK_TYPE(*(list),(entry)),__add_ptr_list((struct ptr_list **)(list),			\
+ 								    (void *)((unsigned long)(entry) & ~3UL), 	\
+ 								    (unsigned long)(entry) & 3)))
+ #define add_ptr_list(list,entry) \
+@@ -138,7 +138,7 @@
+ 		do { int __nr;								\
+ 			for (__nr = 0; __nr < __list->nr; __nr++) {			\
+ 				do {							\
+-					ptr = PTR_ENTRY(__list,__nr);			\
++					ptr = (__typeof__(ptr))PTR_ENTRY(__list,__nr);	\
+ 					do {
+ 
+ #define DO_END_FOR_EACH(ptr, __head, __list, __nr)					\
+@@ -159,7 +159,7 @@
+ 			__nr = __list->nr;						\
+ 			while (--__nr >= 0) {						\
+ 				do {							\
+-					ptr = PTR_ENTRY(__list,__nr);			\
++					ptr = (__typeof__(ptr))PTR_ENTRY(__list,__nr);			\
+ 					do {
+ 
+ 
+@@ -171,26 +171,26 @@
+ 	}										\
+ } while (0)
+ 
+-#define DO_REVERSE(ptr, __head, __list, __nr, new, __newhead,				\
++#define DO_REVERSE(ptr, __head, __list, __nr, newp, __newhead,				\
+ 		   __newlist, __newnr, PTR_ENTRY) do { 					\
+ 	struct ptr_list *__newhead = __head;						\
+ 	struct ptr_list *__newlist = __list;						\
+ 	int __newnr = __nr;								\
+-	new = ptr;									\
+-	goto __inside##new;								\
++	newp = ptr;									\
++	goto __inside##newp;								\
+ 	if (1) {									\
+ 		do {									\
+ 			__newlist = __newlist->prev;					\
+ 			__newnr = __newlist->nr;					\
+-	__inside##new:									\
++	__inside##newp:									\
+ 			while (--__newnr >= 0) {					\
+ 				do {							\
+-					new = PTR_ENTRY(__newlist,__newnr);		\
++					newp = PTR_ENTRY(__newlist,__newnr);		\
+ 					do {
+ 
+-#define RECURSE_PTR_REVERSE(ptr, new)							\
++#define RECURSE_PTR_REVERSE(ptr, newp)							\
+ 	DO_REVERSE(ptr, __head##ptr, __list##ptr, __nr##ptr,				\
+-		   new, __head##new, __list##new, __nr##new, PTR_ENTRY)
++		   newp, __head##newp, __list##newp, __nr##newp, PTR_ENTRY)
+ 
+ #define DO_THIS_ADDRESS(ptr, __head, __list, __nr)					\
+ 	((__typeof__(&(ptr))) (__list->list + __nr))
+@@ -230,7 +230,7 @@
+ 	};										\
+ } while (0)
+ 
+-#define DO_INSERT_CURRENT(new, ptr, __head, __list, __nr) do {				\
++#define DO_INSERT_CURRENT(newp, ptr, __head, __list, __nr) do {				\
+ 	void **__this, **__last;							\
+ 	if (__list->nr == LIST_NODE_NR)							\
+ 		DO_SPLIT(ptr, __head, __list, __nr);					\
+@@ -240,12 +240,12 @@
+ 		__last[1] = __last[0];							\
+ 		__last--;								\
+ 	}										\
+-	*__this = (new);								\
++	*__this = (newp);								\
+ 	__list->nr++;									\
+ } while (0)
+ 
+-#define INSERT_CURRENT(new, ptr) \
+-	DO_INSERT_CURRENT(new, ptr, __head##ptr, __list##ptr, __nr##ptr)
++#define INSERT_CURRENT(newp, ptr) \
++	DO_INSERT_CURRENT(newp, ptr, __head##ptr, __list##ptr, __nr##ptr)
+ 
+ #define DO_DELETE_CURRENT(ptr, __head, __list, __nr) do {				\
+ 	void **__this = __list->list + __nr;						\
+@@ -270,7 +270,7 @@
+ 
+ static inline void update_tag(void *p, unsigned long tag)
+ {
+-	unsigned long *ptr = p;
++	unsigned long *ptr = (unsigned long *)p;
+ 	*ptr = tag | (~3UL & *ptr);
+ }
+ 
+diff -u sparse-0.4.2/symbol.h sparse-silvio/symbol.h
+--- sparse-0.4.2/symbol.h	2009-10-12 16:11:41.000000000 +1100
++++ sparse-silvio/symbol.h	2011-01-28 11:58:58.128538200 +1100
+@@ -24,7 +24,7 @@
+  * token contains the information on where the symbol was
+  * declared.
+  */
+-enum namespace {
++enum namespace_t {
+ 	NS_NONE = 0,
+ 	NS_MACRO = 1,
+ 	NS_TYPEDEF = 2,
+@@ -81,7 +81,7 @@
+ 
+ DECLARE_PTR_LIST(context_list, struct context);
+ 
+-struct ctype {
++struct sparsectype {
+ 	unsigned long modifiers;
+ 	unsigned long alignment;
+ 	struct context_list *contexts;
+@@ -90,7 +90,7 @@
+ };
+ 
+ struct decl_state {
+-	struct ctype ctype;
++	struct sparsectype ctype;
+ 	struct ident **ident;
+ 	struct symbol_op *mode;
+ 	unsigned char prefer_abstract, is_inline, storage_class, is_tls;
+@@ -109,7 +109,7 @@
+ 	struct token *(*attribute)(struct token *token, struct symbol *attr, struct decl_state *ctx);
+ 	struct symbol *(*to_mode)(struct symbol *);
+ 
+-	int test, set, class;
++	int test, set, _class;
+ };
+ 
+ extern int expand_safe_p(struct expression *expr, int cost);
+@@ -121,7 +121,7 @@
+ 
+ struct symbol {
+ 	enum type type:8;
+-	enum namespace namespace:9;
++	enum namespace_t _namespace:9;
+ 	unsigned char used:1, attr:2, enum_member:1, bound:1;
+ 	struct position pos;		/* Where this symbol was declared */
+ 	struct position endpos;		/* Where this symbol ends*/
+@@ -156,9 +156,9 @@
+ 					examined:1,
+ 					expanding:1,
+ 					evaluated:1,
+-					string:1;
++					symbolstring:1;
+ 			struct expression *array_size;
+-			struct ctype ctype;
++			struct sparsectype ctype;
+ 			struct symbol_list *arguments;
+ 			struct statement *stmt;
+ 			struct symbol_list *symbol_list;
+@@ -259,15 +259,17 @@
+ 
+ extern struct symbol_list *translation_unit_used_list;
+ 
++extern "C" {
++
+ extern void access_symbol(struct symbol *);
+ 
+-extern const char * type_difference(struct ctype *c1, struct ctype *c2,
++extern const char * type_difference(struct sparsectype *c1, struct sparsectype *c2,
+ 	unsigned long mod1, unsigned long mod2);
+ 
+-extern struct symbol *lookup_symbol(struct ident *, enum namespace);
+-extern struct symbol *create_symbol(int stream, const char *name, int type, int namespace);
++extern struct symbol *lookup_symbol(struct ident *, enum namespace_t);
++extern struct symbol *create_symbol(int stream, const char *name, int type, int _namespace);
+ extern void init_symbols(void);
+-extern void init_ctype(void);
++extern void init_csparsetype(void);
+ extern struct symbol *alloc_symbol(struct position, int type);
+ extern void show_type(struct symbol *);
+ extern const char *modifier_string(unsigned long mod);
+@@ -276,20 +278,22 @@
+ extern void show_type_list(struct symbol *);
+ extern void show_symbol_list(struct symbol_list *, const char *);
+ extern void add_symbol(struct symbol_list **, struct symbol *);
+-extern void bind_symbol(struct symbol *, struct ident *, enum namespace);
++extern void bind_symbol(struct symbol *, struct ident *, enum namespace_t);
+ 
+ extern struct symbol *examine_symbol_type(struct symbol *);
+ extern struct symbol *examine_pointer_target(struct symbol *);
+ extern void examine_simple_symbol_type(struct symbol *);
+ extern const char *show_typename(struct symbol *sym);
+ extern const char *builtin_typename(struct symbol *sym);
+-extern const char *builtin_ctypename(struct ctype *ctype);
++extern const char *builtin_ctypename(struct sparsectype *ctype);
+ extern const char* get_type_name(enum type type);
+ 
+ extern void debug_symbol(struct symbol *);
+ extern void merge_type(struct symbol *sym, struct symbol *base_type);
+ extern void check_declaration(struct symbol *sym);
+ 
++};
++
+ static inline struct symbol *get_base_type(const struct symbol *sym)
+ {
+ 	return examine_symbol_type(sym->ctype.base_type);
+@@ -364,7 +368,7 @@
+ 	return type->type;
+ }
+ 
+-static inline struct symbol *lookup_keyword(struct ident *ident, enum namespace ns)
++static inline struct symbol *lookup_keyword(struct ident *ident, enum namespace_t ns)
+ {
+ 	if (!ident->keyword)
+ 		return NULL;
+diff -u sparse-0.4.2/token.h sparse-silvio/token.h
+--- sparse-0.4.2/token.h	2009-10-12 16:11:41.000000000 +1100
++++ sparse-silvio/token.h	2011-01-28 11:58:57.925413200 +1100
+@@ -136,7 +136,7 @@
+ 	SPECIAL_UNSIGNED_GTE,
+ };
+ 
+-struct string {
++struct sparsestring {
+ 	unsigned int length;
+ 	char data[];
+ };
+@@ -161,7 +161,7 @@
+ 		const char *number;
+ 		struct ident *ident;
+ 		unsigned int special;
+-		struct string *string;
++		struct sparsestring *string;
+ 		int character;
+ 		int argnum;
+ 		struct argcount count;
+@@ -173,7 +173,7 @@
+ static inline struct token *containing_token(struct token **p)
+ {
+ 	void *addr = (char *)p - ((char *)&((struct token *)0)->next - (char *)0);
+-	return addr;
++	return (struct token *)addr;
+ }
+ 
+ #define token_type(x) ((x)->pos.type)
+@@ -186,6 +186,8 @@
+ extern struct token eof_token_entry;
+ #define eof_token(x) ((x) == &eof_token_entry)
+ 
++extern "C" {
++
+ extern int init_stream(const char *, int fd, const char **next_path);
+ extern const char *stream_name(int stream);
+ extern struct ident *hash_ident(struct ident *);
+@@ -193,7 +195,7 @@
+ extern struct token *built_in_token(int, const char *);
+ extern const char *show_special(int);
+ extern const char *show_ident(const struct ident *);
+-extern const char *show_string(const struct string *string);
++extern const char *show_string(const struct sparsestring *string);
+ extern const char *show_token(const struct token *);
+ extern struct token * tokenize(const char *, int, struct token *, const char **next_path);
+ extern struct token * tokenize_buffer(void *, unsigned long, struct token **);
+@@ -211,4 +213,6 @@
+ 	return token->pos.type == TOKEN_IDENT && token->ident == id;
+ }
+ 
++};
++
+ #endif
